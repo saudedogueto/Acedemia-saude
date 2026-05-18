@@ -1,7 +1,3 @@
-import { initializeApp, getApps, FirebaseApp } from "firebase/app";
-import { getAuth, Auth } from "firebase/auth";
-import { getFirestore, Firestore } from "firebase/firestore";
-
 const firebaseConfig = {
   apiKey: "AIzaSyDg7vyK_hESz63244QHujBMoLYjtJF-l34",
   authDomain: "academia-saude-cabucu.firebaseapp.com",
@@ -12,19 +8,29 @@ const firebaseConfig = {
   measurementId: "G-3TPBKKGJ1Y",
 };
 
-let app: FirebaseApp;
-let auth: Auth;
-let db: Firestore;
+let cachedAuth: any = null;
+let cachedDb: any = null;
 
-if (typeof window !== "undefined") {
+export async function getFirebaseAuth() {
+  if (cachedAuth) return cachedAuth;
+  const mod = await import("firebase/auth");
+  const { getApps, initializeApp } = await import("firebase/app");
   if (!getApps().length) {
-    app = initializeApp(firebaseConfig);
-  } else {
-    app = getApps()[0];
+    initializeApp(firebaseConfig);
   }
-  auth = getAuth(app);
-  db = getFirestore(app);
+  cachedAuth = mod.getAuth(getApps()[0]);
+  return cachedAuth;
 }
 
-// Configuracao Firebase v2 - API Key corrigida
-export { app, auth, db };
+export async function getFirebaseDb() {
+  if (cachedDb) return cachedDb;
+  const mod = await import("firebase/firestore");
+  const { getApps, initializeApp } = await import("firebase/app");
+  if (!getApps().length) {
+    initializeApp(firebaseConfig);
+  }
+  cachedDb = mod.getFirestore(getApps()[0]);
+  return cachedDb;
+}
+
+export { firebaseConfig };

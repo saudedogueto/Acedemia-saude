@@ -51,7 +51,7 @@ export default function AulasPage() {
   }, [router]);
 
   const filtradas = filtroDia
-    ? aulas.filter((a) => a.diaSemana === filtroDia)
+    ? aulas.filter((a) => a.diasSemana?.includes(filtroDia))
     : aulas;
 
   if (loading) return <LoadingScreen />;
@@ -108,7 +108,7 @@ export default function AulasPage() {
                   {aula.nome}
                 </p>
                 <p className="text-sm text-stone-500">
-                  {aula.diaSemana} · {aula.horario}
+                  {aula.diasSemana?.join(', ') || 'Sem dias'} · {aula.horario}
                 </p>
                 <p className="text-xs text-stone-400">{aula.faixaEtaria}</p>
               </div>

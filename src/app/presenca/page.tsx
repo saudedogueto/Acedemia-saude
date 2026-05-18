@@ -59,7 +59,7 @@ function PresencaForm() {
     async function carregarAlunos() {
       try {
         const data = await listarAlunos();
-        const comId = data.filter((a): a is Aluno & { id: string } => !!a.id);
+        const comId: (Aluno & { id: string })[] = data.filter((a: any) => !!a.id);
         setAlunos(comId);
         const inicial: Record<string, boolean> = {};
         comId.forEach((a) => { inicial[a.id] = true; });

@@ -70,7 +70,7 @@ export default function AulaDetalhesPage() {
           <div>
             <h1 className="text-xl font-bold text-stone-800">{aula.nome}</h1>
             <p className="mt-1 text-sm text-stone-500">
-              {aula.diaSemana} · {aula.horario}
+              {aula.diasSemana?.join(', ') || 'Sem dias definidos'} · {aula.horario}
             </p>
             {aula.faixaEtaria && (
               <span className="mt-1 inline-block rounded-full bg-orange-100 px-3 py-0.5 text-xs font-medium text-orange-700">

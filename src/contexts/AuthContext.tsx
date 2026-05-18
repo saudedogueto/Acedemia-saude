@@ -1,22 +1,21 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { User } from "firebase/auth";
 import { onAuthChange } from "@/lib/auth";
 
 interface AuthContextType {
-  user: User | null;
+  user: any | null;
   loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({ user: null, loading: true });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthChange((u) => {
+    const unsub = onAuthChange((u: any) => {
       setUser(u);
       setLoading(false);
     });

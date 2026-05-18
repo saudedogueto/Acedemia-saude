@@ -1,221 +1,168 @@
-import {
-  collection,
-  addDoc,
-  getDocs,
-  getDoc,
-  doc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  Timestamp,
-  serverTimestamp,
-} from "firebase/firestore";
-import { db } from "./firebase";
-import { getAuth } from "firebase/auth";
+import { getFirebaseDb } from "./firebase";
 
-// ========== TIPOS ==========
+let dbPromise: Promise<any> | null = null;
+function getDb() {
+  if (!dbPromise) dbPromise = getFirebaseDb();
+  return dbPromise;
+}
 
-export interface Aluno {
-  id?: string;
+let fsModulePromise: Promise<any> | null = null;
+function getFs() {
+  if (!fsModulePromise) fsModulePromise = import("firebase/firestore");
+  return fsModulePromise;
+}
+
+// ─── Generic helpers ──────────────────────────────────────
+
+export async function addDoc(collection: string, data: any) {
+  const [db, mod] = await Promise.all([getDb(), getFs()]);
+  const col = mod.collection(db, collection);
+  return mod.addDoc(col, data);
+}
+
+export async function setDoc(collection: string, id: string, data: any) {
+  const [db, mod] = await Promise.all([getDb(), getFs()]);
+  const doc = mod.doc(db, collection, id);
+  return mod.setDoc(doc, data);
+}
+
+export async function getDoc(collection: string, id: string) {
+  const [db, mod] = await Promise.all([getDb(), getFs()]);
+  const doc = mod.doc(db, collection, id);
+  const snap = await mod.getDoc(doc);
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function getDocs(collection: string) {
+  const [db, mod] = await Promise.all([getDb(), getFs()]);
+  const col = mod.collection(db, collection);
+  const snap = await mod.getDocs(col);
+  return snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+}
+
+export async function updateDoc(collection: string, id: string, data: any) {
+  const [db, mod] = await Promise.all([getDb(), getFs()]);
+  const doc = mod.doc(db, collection, id);
+  return mod.updateDoc(doc, data);
+}
+
+export async function deleteDoc(collection: string, id: string) {
+  const [db, mod] = await Promise.all([getDb(), getFs()]);
+  const doc = mod.doc(db, collection, id);
+  return mod.deleteDoc(doc);
+}
+
+export async function queryDocs(collection: string, field: string, op: any, value: any) {
+  const [db, mod] = await Promise.all([getDb(), getFs()]);
+  const col = mod.collection(db, collection);
+  const q = mod.query(col, mod.where(field, op, value));
+  const snap = await mod.getDocs(q);
+  return snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+}
+
+// ─── App-specific helpers ──────────────────────────────────
+
+export async function criarAluno(data: any) {
+  return addDoc("alunos", data);
+}
+
+export async function listarAlunos() {
+  return getDocs("alunos");
+}
+
+export async function getAluno(id: string) {
+  return getDoc("alunos", id);
+}
+
+export async function criarAula(data: any) {
+  return addDoc("aulas", data);
+}
+
+export async function listarAulas() {
+  return getDocs("aulas");
+}
+
+export async function getAula(id: string) {
+  return getDoc("aulas", id);
+}
+
+export async function listarAlunosDaAula(aulaId: string) {
+  return queryDocs("alunos", "aulaId", "==", aulaId);
+}
+
+export async function salvarPresencas(aulaIdOrList: string | any[], presencas?: any[]) {
+  if (Array.isArray(aulaIdOrList)) {
+    for (const p of aulaIdOrList) {
+      await addDoc("presencas", p);
+    }
+  } else if (presencas) {
+    for (const p of presencas) {
+      await addDoc("presencas", { aulaId: aulaIdOrList, ...p });
+    }
+  }
+}
+
+export async function listarMedidas(alunoId: string) {
+  return queryDocs("medidas", "alunoId", "==", alunoId);
+}
+
+export async function listarPresencasPorAluno(alunoId: string) {
+  return queryDocs("presencas", "alunoId", "==", alunoId);
+}
+
+export async function getEstatisticas() {
+  const [alunos, aulas] = await Promise.all([listarAlunos(), listarAulas()]);
+  return {
+    totalAlunos: alunos.length,
+    totalAulas: aulas.length,
+    taxaPresenca: 0,
+  };
+}
+
+// ─── Types ─────────────────────────────────────────────────
+
+export type Aluno = {
+  id: string;
   nome: string;
-  dataNascimento?: string;
+  email?: string;
   telefone?: string;
+  dataNascimento?: string;
+  objetivo?: string;
+  observacoes?: string;
   endereco?: string;
   bairro?: string;
   contatoEmergencia?: string;
-  observacoes?: string;
-  ativo?: boolean;
-  dataCadastro?: Timestamp;
-  createdBy?: string;
-}
+  criadoEm?: any;
+};
 
-export interface MedidaCorporal {
-  id?: string;
-  alunoId: string;
-  data: string;
-  peso: number;
-  altura: number;
-  cintura: number;
-  quadril: number;
-  imc?: number;
-  observacoes?: string;
-  createdBy?: string;
-}
-
-export interface Aula {
-  id?: string;
+export type Aula = {
+  id: string;
   nome: string;
-  diaSemana: string;
   horario: string;
-  faixaEtaria: string;
+  diasSemana: string[];
+  professor?: string;
+  faixaEtaria?: string;
   descricao?: string;
-  ativa?: boolean;
-  createdBy?: string;
-}
+  criadoEm?: any;
+};
 
-export interface Presenca {
-  id?: string;
+export type Presenca = {
+  id: string;
   aulaId: string;
   alunoId: string;
   data: string;
   presente: boolean;
-  createdBy?: string;
-}
+};
 
-// ========== HELPERS ==========
-
-function getCurrentUser() {
-  const auth = getAuth();
-  return auth.currentUser?.email || "admin";
-}
-
-// ========== ALUNOS ==========
-
-const alunosRef = () => collection(db, "alunos");
-
-export async function criarAluno(aluno: any) {
-  return addDoc(alunosRef(), {
-    ...aluno,
-    ativo: true,
-    dataCadastro: serverTimestamp(),
-    createdBy: getCurrentUser(),
-  });
-}
-
-export async function listarAlunos(): Promise<Aluno[]> {
-  const q = query(alunosRef(), orderBy("nome"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Aluno));
-}
-
-export async function getAluno(id: string): Promise<Aluno | null> {
-  const snap = await getDoc(doc(db, "alunos", id));
-  if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() } as Aluno;
-}
-
-export async function atualizarAluno(id: string, dados: Partial<Aluno>) {
-  return updateDoc(doc(db, "alunos", id), dados);
-}
-
-export async function removerAluno(id: string) {
-  return deleteDoc(doc(db, "alunos", id));
-}
-
-// ========== MEDIDAS ==========
-
-const medidasRef = () => collection(db, "medidas");
-
-export async function criarMedida(medida: any) {
-  return addDoc(medidasRef(), {
-    ...medida,
-    createdBy: getCurrentUser(),
-  });
-}
-
-export async function listarMedidas(alunoId: string): Promise<MedidaCorporal[]> {
-  const q = query(
-    medidasRef(),
-    where("alunoId", "==", alunoId),
-    orderBy("data", "desc")
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as MedidaCorporal));
-}
-
-// ========== AULAS ==========
-
-const aulasRef = () => collection(db, "aulas");
-
-export async function criarAula(aula: any) {
-  return addDoc(aulasRef(), {
-    ...aula,
-    ativa: true,
-    createdBy: getCurrentUser(),
-  });
-}
-
-export async function listarAulas(): Promise<Aula[]> {
-  const q = query(aulasRef(), orderBy("diaSemana"), orderBy("horario"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Aula));
-}
-
-export async function getAula(id: string): Promise<Aula | null> {
-  const snap = await getDoc(doc(db, "aulas", id));
-  if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() } as Aula;
-}
-
-export async function atualizarAula(id: string, dados: Partial<Aula>) {
-  return updateDoc(doc(db, "aulas", id), dados);
-}
-
-// ========== PRESENCA ==========
-
-const presencasRef = () => collection(db, "presencas");
-
-export async function salvarPresencas(presencas: Omit<Presenca, "id" | "createdBy">[]) {
-  const batch = presencas.map((p) =>
-    addDoc(presencasRef(), { ...p, createdBy: getCurrentUser() })
-  );
-  return Promise.all(batch);
-}
-
-export async function listarPresencasPorAula(aulaId: string) {
-  const q = query(
-    presencasRef(),
-    where("aulaId", "==", aulaId),
-    orderBy("data", "desc")
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Presenca));
-}
-
-export async function listarPresencasPorAluno(alunoId: string): Promise<Presenca[]> {
-  const q = query(
-    presencasRef(),
-    where("alunoId", "==", alunoId),
-    orderBy("data", "desc")
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Presenca));
-}
-
-// ========== ALUNOS DE UMA AULA ==========
-
-export async function listarAlunosDaAula(aulaId: string): Promise<Aluno[]> {
-  // Busca alunos que têm presença nessa aula
-  const presencas = await listarPresencasPorAula(aulaId);
-  const alunoIds = [...new Set(presencas.map((p) => p.alunoId))];
-
-  if (alunoIds.length === 0) return [];
-
-  const alunos = await Promise.all(alunoIds.map((id) => getAluno(id)));
-  return alunos.filter(Boolean) as Aluno[];
-}
-
-// ========== ESTATISTICAS ==========
-
-export async function getEstatisticas() {
-  const [alunosSnap, aulasSnap, presencasSnap] = await Promise.all([
-    getDocs(alunosRef()),
-    getDocs(aulasRef()),
-    getDocs(presencasRef()),
-  ]);
-
-  const totalAlunos = alunosSnap.size;
-  const totalAulas = aulasSnap.size;
-  const totalPresencas = presencasSnap.size;
-  const presentes = presencasSnap.docs.filter((d) => d.data().presente).length;
-
-  return {
-    totalAlunos,
-    totalAulas,
-    totalPresencas,
-    totalPresentes: presentes,
-    taxaPresenca: totalPresencas > 0 ? Math.round((presentes / totalPresencas) * 100) : 0,
-  };
-}
+export type MedidaCorporal = {
+  id: string;
+  alunoId: string;
+  data: string;
+  peso?: number;
+  altura?: number;
+  cintura?: number;
+  quadril?: number;
+  braco?: number;
+  coxa?: number;
+  observacoes?: string;
+};
