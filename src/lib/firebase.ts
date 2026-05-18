@@ -26,4 +26,5 @@ if (typeof window !== "undefined") {
   db = getFirestore(app);
 }
 
+// Configuracao Firebase v2 - API Key corrigida
 export { app, auth, db };
