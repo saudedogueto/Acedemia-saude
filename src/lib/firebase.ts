@@ -3,7 +3,7 @@ import { getAuth, Auth } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBi3Skuv7YNK3S_iJp_-NvZf2GOsqS0Ako",
+  apiKey: "AIzaSyDg7vyK_hESz63244QHujBMoLYjtJF-l34",
   authDomain: "academia-saude-cabucu.firebaseapp.com",
   projectId: "academia-saude-cabucu",
   storageBucket: "academia-saude-cabucu.firebasestorage.app",
